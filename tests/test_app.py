@@ -142,6 +142,7 @@ def test_items_page_renders_double_click_inline_editing(client: TestClient) -> N
     response = client.get("/items")
 
     assert response.status_code == 200
+    assert "1 item in current inventory" in response.text
     assert 'class="row-cell-display"' in response.text
     assert 'class="row-edit-input row-inline-editor"' in response.text
     assert 'class="row-edit-input row-inline-editor row-inline-editor-wide"' in response.text
@@ -205,6 +206,7 @@ def test_search_filters_inventory_results(client: TestClient) -> None:
     response = client.get("/items?search=Soup")
 
     assert response.status_code == 200
+    assert "1 item in current inventory" in response.text
     assert "Tomato Soup" in response.text
     assert "Shampoo" not in response.text
 

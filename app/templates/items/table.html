@@ -1,4 +1,7 @@
 <section id="item-table" class="table-shell">
+  <div class="table-summary">
+    <p class="table-summary-count">{{ items|length }} {{ 'item' if items|length == 1 else 'items' }} in current inventory</p>
+  </div>
   {% if items %}
     <form id="bulk-edit-form" class="bulk-edit-form" method="post" action="/items/bulk-update">
       <input type="hidden" name="sort_by" value="{{ sort_by }}" />

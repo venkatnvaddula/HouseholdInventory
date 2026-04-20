@@ -351,6 +351,16 @@ textarea {
   gap: 0.9rem;
 }
 
+.table-summary {
+  margin-bottom: 0.9rem;
+}
+
+.table-summary-count {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--muted);
+}
+
 .bulk-edit-toolbar {
   display: flex;
   justify-content: flex-start;
