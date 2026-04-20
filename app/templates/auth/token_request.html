@@ -1,0 +1,22 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="form-shell auth-shell">
+    <div>
+      <p class="eyebrow">Account recovery</p>
+      <h2>{{ page_title }}</h2>
+      <p class="form-help">{{ description }}</p>
+    </div>
+
+    <form class="item-form" method="post" action="{{ form_action }}">
+      <label>
+        <span>Email</span>
+        <input name="email" type="email" autocomplete="email" required />
+      </label>
+      <div class="card-actions">
+        <button class="button" type="submit">{{ submit_label }}</button>
+        <a class="button button-secondary" href="/login">Back to login</a>
+      </div>
+    </form>
+  </section>
+{% endblock %}

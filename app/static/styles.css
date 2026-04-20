@@ -622,6 +622,15 @@ textarea {
   align-items: start;
 }
 
+.card-actions-inline-links {
+  justify-content: flex-start;
+  gap: 1rem;
+}
+
+.card-actions-inline-links a {
+  color: var(--accent-strong);
+}
+
 .pill {
   padding: 0.3rem 0.65rem;
   border-radius: 999px;

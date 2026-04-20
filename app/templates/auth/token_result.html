@@ -1,0 +1,18 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="form-shell auth-shell">
+    <div>
+      <p class="eyebrow">Account status</p>
+      <h2>{{ page_title }}</h2>
+      <p class="form-help">{{ message }}</p>
+    </div>
+
+    <div class="card-actions">
+      {% if next_href %}
+        <a class="button" href="{{ next_href }}">{{ next_label or 'Continue' }}</a>
+      {% endif %}
+      <a class="button button-secondary" href="/login">Back to login</a>
+    </div>
+  </section>
+{% endblock %}

@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="form-shell auth-shell">
+    <div>
+      <p class="eyebrow">Account link</p>
+      <h2>{{ page_title }}</h2>
+      <p class="form-help">{{ message }}</p>
+    </div>
+
+    {% if preview_url %}
+      <label>
+        <span>Development preview link</span>
+        <input value="{{ preview_url }}" readonly />
+      </label>
+      <div class="card-actions">
+        <a class="button" href="{{ preview_url }}">Open preview link</a>
+        <a class="button button-secondary" href="/login">Back to login</a>
+      </div>
+    {% else %}
+      <div class="card-actions">
+        <a class="button" href="/login">Back to login</a>
+      </div>
+    {% endif %}
+  </section>
+{% endblock %}

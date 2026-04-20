@@ -1,10 +1,13 @@
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from enum import Enum
 
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from pwdlib import PasswordHash
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
+from app.config import get_settings
 from app.models.household import Household, HouseholdMember, User
 
 
@@ -16,6 +19,17 @@ class AuthContext:
     user: User
     household: Household
     membership: HouseholdMember
+
+
+class TokenStatus(str, Enum):
+    INVALID = "invalid"
+    EXPIRED = "expired"
+
+
+@dataclass
+class TokenResult:
+    user: User | None
+    status: TokenStatus | None = None
 
 
 def normalize_email(email: str) -> str:
@@ -30,8 +44,61 @@ def verify_password(password: str, password_hash: str) -> bool:
     return password_hasher.verify(password, password_hash)
 
 
+def _token_serializer() -> URLSafeTimedSerializer:
+    settings = get_settings()
+    return URLSafeTimedSerializer(settings.session_secret)
+
+
+def _build_user_token(user: User, *, purpose: str) -> str:
+    serializer = _token_serializer()
+    return serializer.dumps({"user_id": user.id, "email": user.email}, salt=purpose)
+
+
+def _resolve_user_token(session: Session, token: str, *, purpose: str, max_age_seconds: int) -> TokenResult:
+    serializer = _token_serializer()
+    try:
+        payload = serializer.loads(token, salt=purpose, max_age=max_age_seconds)
+    except SignatureExpired:
+        return TokenResult(user=None, status=TokenStatus.EXPIRED)
+    except BadSignature:
+        return TokenResult(user=None, status=TokenStatus.INVALID)
+
+    user = session.get(User, int(payload.get("user_id", 0)))
+    if user is None or user.email != payload.get("email"):
+        return TokenResult(user=None, status=TokenStatus.INVALID)
+    return TokenResult(user=user)
+
+
 def get_user_by_email(session: Session, email: str) -> User | None:
     return session.scalar(select(User).where(User.email == normalize_email(email)))
+
+
+def create_email_verification_token(user: User) -> str:
+    return _build_user_token(user, purpose="verify-email")
+
+
+def create_password_reset_token(user: User) -> str:
+    return _build_user_token(user, purpose="password-reset")
+
+
+def resolve_email_verification_token(session: Session, token: str) -> TokenResult:
+    settings = get_settings()
+    return _resolve_user_token(
+        session,
+        token,
+        purpose="verify-email",
+        max_age_seconds=settings.email_verification_max_age_seconds,
+    )
+
+
+def resolve_password_reset_token(session: Session, token: str) -> TokenResult:
+    settings = get_settings()
+    return _resolve_user_token(
+        session,
+        token,
+        purpose="password-reset",
+        max_age_seconds=settings.password_reset_max_age_seconds,
+    )
 
 
 def get_auth_context_for_user(session: Session, user_id: int) -> AuthContext | None:
@@ -53,7 +120,7 @@ def get_auth_context_for_user(session: Session, user_id: int) -> AuthContext | N
 
 def authenticate_user(session: Session, email: str, password: str) -> AuthContext | None:
     user = get_user_by_email(session, email)
-    if user is None or not user.is_active:
+    if user is None or not user.is_active or user.email_verified_at is None:
         return None
     if not verify_password(password, user.password_hash):
         return None
@@ -83,7 +150,7 @@ def register_owner_account(
     display_name: str,
     password: str,
     household_name: str,
-) -> AuthContext:
+) -> User:
     normalized_email = normalize_email(email)
     if not normalized_email:
         raise ValueError("Email is required.")
@@ -99,6 +166,7 @@ def register_owner_account(
         display_name=display_name.strip(),
         password_hash=hash_password(password),
         is_active=True,
+        email_verified_at=None,
     )
     household = Household(name=_build_household_name(session, household_name, display_name))
     session.add_all([user, household])
@@ -108,7 +176,8 @@ def register_owner_account(
     session.add(membership)
     session.commit()
 
-    return get_auth_context_for_user(session, user.id)
+    session.refresh(user)
+    return user
 
 
 def list_household_members(session: Session, household_id: int) -> list[HouseholdMember]:
@@ -147,6 +216,7 @@ def add_household_member(
             display_name=display_name.strip(),
             password_hash=hash_password(password),
             is_active=True,
+            email_verified_at=None,
         )
         session.add(user)
         session.flush()
@@ -191,3 +261,22 @@ def remove_household_member(session: Session, *, household_id: int, member_id: i
 
     session.delete(membership)
     session.commit()
+
+
+def mark_email_verified(session: Session, user: User) -> User:
+    if user.email_verified_at is None:
+        user.email_verified_at = datetime.now(timezone.utc)
+        session.add(user)
+        session.commit()
+        session.refresh(user)
+    return user
+
+
+def update_password(session: Session, user: User, new_password: str) -> User:
+    if len(new_password) < 8:
+        raise ValueError("Password must be at least 8 characters.")
+    user.password_hash = hash_password(new_password)
+    session.add(user)
+    session.commit()
+    session.refresh(user)
+    return user

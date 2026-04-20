@@ -13,6 +13,7 @@ from app.routes.items import router as items_router
 def create_app() -> FastAPI:
     settings = get_settings()
     app = FastAPI(title=settings.app_name)
+    app.state.settings = settings
     app.add_middleware(
         SessionMiddleware,
         secret_key=settings.session_secret,
