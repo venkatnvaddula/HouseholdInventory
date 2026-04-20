@@ -1,0 +1,33 @@
+[project]
+name = "household-inventory"
+version = "0.1.0"
+description = "Shared household inventory app built with FastAPI and PostgreSQL."
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.16.0",
+    "fastapi>=0.115.12",
+    "jinja2>=3.1.6",
+    "psycopg[binary]>=3.2.9",
+    "pydantic-settings>=2.9.1",
+    "python-multipart>=0.0.20",
+    "sqlalchemy>=2.0.40",
+    "uvicorn[standard]>=0.34.2",
+]
+
+[project.optional-dependencies]
+dev = [
+    "httpx>=0.28.1",
+    "pytest>=8.3.5",
+]
+
+[build-system]
+requires = ["setuptools>=80.3.1"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["app*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]

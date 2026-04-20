@@ -1,0 +1,617 @@
+<section id="item-table" class="table-shell">
+  {% if items %}
+    <form id="bulk-edit-form" class="bulk-edit-form" method="post" action="/items/bulk-update">
+      <input type="hidden" name="sort_by" value="{{ sort_by }}" />
+      <input type="hidden" name="sort_dir" value="{{ sort_dir }}" />
+      <input type="hidden" name="search" value="{{ search }}" />
+
+      <div class="bulk-edit-toolbar">
+        <div class="bulk-edit-controls">
+          <label class="bulk-field-control">
+            <span>Bulk edit column</span>
+            <select name="field" id="bulk-field-selector">
+              {% for field_key, field_label in bulk_edit_fields.items() %}
+                <option value="{{ field_key }}">{{ field_label }}</option>
+              {% endfor %}
+            </select>
+          </label>
+
+          <div class="bulk-value-control">
+            <div class="bulk-input-group" data-bulk-type="text">
+              <label>
+                <span>Value</span>
+                <input name="text_value" id="bulk-text-value" placeholder="Enter a new value" />
+              </label>
+            </div>
+
+            <div class="bulk-input-group hidden" data-bulk-type="number">
+              <label>
+                <span>Value</span>
+                <input name="number_value" id="bulk-number-value" type="number" step="0.01" />
+              </label>
+            </div>
+
+            <div class="bulk-input-group hidden" data-bulk-type="date">
+              <label>
+                <span>Value</span>
+                <input name="date_value" id="bulk-date-value" type="date" />
+              </label>
+            </div>
+
+            <div class="bulk-input-group hidden" data-bulk-type="category">
+              <label>
+                <span>Value</span>
+                <select name="category_choice" data-custom-target="bulk-category-custom">
+                  {% for option in category_options %}
+                    <option value="{{ option }}">{{ option }}</option>
+                  {% endfor %}
+                  <option value="__custom__">Add new...</option>
+                </select>
+              </label>
+              <input id="bulk-category-custom" class="custom-option-input hidden" name="category_custom" placeholder="Enter a new category" />
+            </div>
+
+            <div class="bulk-input-group hidden" data-bulk-type="location">
+              <label>
+                <span>Value</span>
+                <select name="location_choice" data-custom-target="bulk-location-custom">
+                  {% for option in location_options %}
+                    <option value="{{ option }}">{{ option }}</option>
+                  {% endfor %}
+                  <option value="__custom__">Add new...</option>
+                </select>
+              </label>
+              <input id="bulk-location-custom" class="custom-option-input hidden" name="location_custom" placeholder="Enter a new location" />
+            </div>
+          </div>
+        </div>
+
+        <div class="bulk-edit-actions">
+          <button class="button" type="submit">Apply</button>
+          <button
+            class="button button-danger"
+            type="submit"
+            formaction="/items/bulk-delete"
+            formmethod="post"
+            onclick="return window.confirm('Delete selected items?');"
+          >
+            Delete
+          </button>
+          <a class="button button-secondary bulk-export-button" href="/items/export.csv?search={{ search }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}">
+            Export CSV
+          </a>
+          <a class="button button-secondary" href="/items/export-history.csv">
+            Export history
+          </a>
+        </div>
+      </div>
+    </form>
+
+    <div class="table-scroll">
+      <table class="inventory-table">
+        <colgroup>
+          <col class="select-col" data-column-key="select" />
+          <col class="name-col" data-column-key="name" />
+          <col class="category-col" data-column-key="category" />
+          <col class="count-col" data-column-key="count" />
+          <col class="size-col" data-column-key="size" />
+          <col class="units-col" data-column-key="units" />
+          <col class="location-col" data-column-key="location" />
+          <col class="purchase-col" data-column-key="purchase_date" />
+          <col class="expiry-col" data-column-key="expiry_date" />
+          <col class="price-col" data-column-key="price" />
+          <col class="notes-col" data-column-key="notes" />
+          <col class="actions-col" data-column-key="actions" />
+        </colgroup>
+        <thead>
+          <tr>
+            <th class="select-column" data-column-key="select"><input id="select-all-items" type="checkbox" /></th>
+            {% for column in sortable_columns %}
+              <th data-column-key="{{ column.key }}" draggable="true">
+                <span class="column-header-label">
+                  <a
+                    class="sort-link {% if sort_by == column.key %}sort-link-active{% endif %}"
+                    href="/items?search={{ search }}&sort_by={{ column.key }}&sort_dir={{ column.next_dir }}"
+                  >
+                    {{ column.label }}
+                    {% if sort_by == column.key %}
+                      <span class="sort-indicator">{{ '↑' if sort_dir == 'asc' else '↓' }}</span>
+                    {% endif %}
+                  </a>
+                </span>
+                <span class="column-resizer" aria-hidden="true"></span>
+              </th>
+            {% endfor %}
+            <th data-column-key="actions" draggable="true">
+              <span class="column-header-label">
+                <span>Actions</span>
+              </span>
+              <span class="column-resizer" aria-hidden="true"></span>
+            </th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for item in items %}
+            <tr class="inventory-row" data-item-id="{{ item.id }}">
+              <td class="select-column" data-column-key="select">
+                <input class="row-selector" form="bulk-edit-form" name="item_ids" type="checkbox" value="{{ item.id }}" />
+              </td>
+              <td data-column-key="name">
+                <span class="row-cell-display">{{ item.name }}</span>
+                <input class="row-edit-input row-inline-editor" form="item-form-{{ item.id }}" name="name" value="{{ item.name }}" />
+              </td>
+              <td data-column-key="category">
+                <span class="row-cell-display">{{ item.category }}</span>
+                <select class="row-edit-input row-inline-editor row-inline-editor-wide" form="item-form-{{ item.id }}" name="category">
+                  {% if item.category not in category_options %}
+                    <option value="{{ item.category }}" selected>{{ item.category }}</option>
+                  {% endif %}
+                  {% for option in category_options %}
+                    <option value="{{ option }}" {% if item.category == option %}selected{% endif %}>{{ option }}</option>
+                  {% endfor %}
+                </select>
+                <input form="item-form-{{ item.id }}" name="category_custom" type="hidden" value="" />
+              </td>
+              <td data-column-key="count">
+                <span class="row-cell-display">{{ item.count }}</span>
+                <input class="row-edit-input row-inline-editor" form="item-form-{{ item.id }}" name="count" type="number" step="1" min="0" value="{{ item.count }}" />
+              </td>
+              <td data-column-key="size">
+                <span class="row-cell-display">{{ '{:g}'.format(item.size) }}</span>
+                <input class="row-edit-input row-inline-editor" form="item-form-{{ item.id }}" name="size" type="number" step="0.01" min="0" value="{{ item.size }}" />
+              </td>
+              <td data-column-key="units">
+                <span class="row-cell-display">{{ item.units }}</span>
+                <input class="row-edit-input row-inline-editor" form="item-form-{{ item.id }}" name="units" value="{{ item.units }}" />
+              </td>
+              <td data-column-key="location">
+                <span class="row-cell-display">{{ item.location }}</span>
+                <select class="row-edit-input row-inline-editor row-inline-editor-wide" form="item-form-{{ item.id }}" name="location">
+                  {% if item.location not in location_options %}
+                    <option value="{{ item.location }}" selected>{{ item.location }}</option>
+                  {% endif %}
+                  {% for option in location_options %}
+                    <option value="{{ option }}" {% if item.location == option %}selected{% endif %}>{{ option }}</option>
+                  {% endfor %}
+                </select>
+                <input form="item-form-{{ item.id }}" name="location_custom" type="hidden" value="" />
+              </td>
+              <td data-column-key="purchase_date">
+                <span class="row-cell-display">{{ item.purchase_date or '-' }}</span>
+                <input class="row-edit-input row-inline-editor row-inline-editor-wide" form="item-form-{{ item.id }}" name="purchase_date" type="date" value="{{ item.purchase_date.isoformat() if item.purchase_date else '' }}" />
+              </td>
+              <td data-column-key="expiry_date">
+                <span class="row-cell-display">{{ item.expiry_date or '-' }}</span>
+                <input class="row-edit-input row-inline-editor row-inline-editor-wide" form="item-form-{{ item.id }}" name="expiry_date" type="date" value="{{ item.expiry_date.isoformat() if item.expiry_date else '' }}" />
+              </td>
+              <td data-column-key="price">
+                <span class="row-cell-display">{% if item.price is not none %}${{ '%.2f'|format(item.price) }}{% else %}-{% endif %}</span>
+                <input class="row-edit-input row-inline-editor" form="item-form-{{ item.id }}" name="price" inputmode="decimal" value="{{ item.price if item.price is not none else '' }}" />
+              </td>
+              <td class="notes-cell" data-column-key="notes">
+                <span class="row-cell-display">{{ item.notes or '-' }}</span>
+                <input class="row-edit-input row-inline-editor" form="item-form-{{ item.id }}" name="notes" value="{{ item.notes or '' }}" />
+              </td>
+              <td data-column-key="actions">
+                <div class="table-actions table-actions-compact row-action-group row-action-group-default">
+                  <button class="button button-secondary button-small row-mobile-edit-trigger" type="button">Edit</button>
+                  <button
+                    class="button button-danger button-small"
+                    type="button"
+                    hx-delete="/items/{{ item.id }}?search={{ search }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}"
+                    hx-target="#item-table"
+                    hx-swap="outerHTML"
+                    hx-confirm="Delete {{ item.name }}?"
+                  >
+                    Delete
+                  </button>
+                </div>
+              </td>
+            </tr>
+            <tr class="inventory-editor-row" data-editor-for="{{ item.id }}">
+              <td colspan="12">
+                <form id="item-form-{{ item.id }}" class="row-edit-form" method="post" action="/items/{{ item.id }}?search={{ search | urlencode }}&sort_by={{ sort_by }}&sort_dir={{ sort_dir }}">
+                  <div class="table-actions row-editor-panel">
+                    <button class="button button-small" type="submit">Save</button>
+                    <button class="button button-secondary button-small row-edit-cancel" type="button">Cancel</button>
+                  </div>
+                </form>
+              </td>
+            </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <div id="mobile-editor-dock" class="mobile-editor-dock" aria-hidden="true">
+      <button id="mobile-editor-save" class="button" type="submit">Save</button>
+      <button id="mobile-editor-cancel" class="button button-secondary" type="button">Cancel</button>
+    </div>
+  {% else %}
+    <article class="empty-state">
+      {% if search %}
+        <h3>No items found</h3>
+        <p>No items match "{{ search }}". Try a different name, category, location, or note keyword.</p>
+        <a class="button button-secondary" href="/items?sort_by={{ sort_by }}&sort_dir={{ sort_dir }}">Clear search</a>
+      {% else %}
+        <h3>No items yet</h3>
+        <p>Start with pantry staples, cleaning supplies, or freezer items so both of you can see the same list.</p>
+        <a class="button" href="/items/new">Add your first item</a>
+      {% endif %}
+    </article>
+  {% endif %}
+</section>
+
+<script>
+  const bulkFieldSelector = document.getElementById('bulk-field-selector');
+  const selectAllItems = document.getElementById('select-all-items');
+  const inventoryTable = document.querySelector('.inventory-table');
+  const inventoryRows = Array.from(document.querySelectorAll('.inventory-row'));
+  const mobileEditorDock = document.getElementById('mobile-editor-dock');
+  const mobileEditorSave = document.getElementById('mobile-editor-save');
+  const mobileEditorCancel = document.getElementById('mobile-editor-cancel');
+  let activeEditingRow = null;
+  const longPressDelayMs = 450;
+
+  const focusInlineEditor = (editor) => {
+    if (!editor) {
+      return;
+    }
+
+    editor.focus();
+
+    if (editor.tagName === 'INPUT' && editor.type !== 'date' && editor.type !== 'checkbox') {
+      if (editor.select instanceof Function) {
+        editor.select();
+      }
+      return;
+    }
+
+    if (editor.tagName === 'TEXTAREA' && editor.select instanceof Function) {
+      editor.select();
+    }
+  };
+
+  const closeInlineEditor = (row) => {
+    if (!row) {
+      return;
+    }
+
+    row.classList.remove('is-editing');
+    const editorRow = document.querySelector(`.inventory-editor-row[data-editor-for="${row.dataset.itemId}"]`);
+    editorRow?.classList.remove('is-editing');
+    row.querySelector('.row-edit-form')?.reset();
+    editorRow?.querySelector('.row-edit-form')?.reset();
+    if (activeEditingRow === row) {
+      activeEditingRow = null;
+    }
+    mobileEditorDock?.classList.remove('is-active');
+    mobileEditorDock?.setAttribute('aria-hidden', 'true');
+    mobileEditorSave?.removeAttribute('form');
+  };
+
+  const openInlineEditor = (row, preferredEditor = null) => {
+    for (const otherRow of inventoryRows) {
+      if (otherRow !== row) {
+        closeInlineEditor(otherRow);
+      }
+    }
+
+    row.classList.add('is-editing');
+    activeEditingRow = row;
+    const editorRow = document.querySelector(`.inventory-editor-row[data-editor-for="${row.dataset.itemId}"]`);
+    editorRow?.classList.add('is-editing');
+    mobileEditorSave?.setAttribute('form', `item-form-${row.dataset.itemId}`);
+    mobileEditorDock?.classList.add('is-active');
+    mobileEditorDock?.setAttribute('aria-hidden', 'false');
+    editorRow?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    const firstInput = preferredEditor || row.querySelector('.row-inline-editor');
+    focusInlineEditor(firstInput);
+  };
+
+  for (const row of inventoryRows) {
+    let longPressTimer = null;
+
+    row.addEventListener('dblclick', (event) => {
+      if (event.target.closest('.row-action-group') || event.target.closest('.select-column')) {
+        return;
+      }
+
+      const targetCell = event.target.closest('td[data-column-key]');
+      const preferredEditor = targetCell?.querySelector('.row-inline-editor') || null;
+      openInlineEditor(row, preferredEditor);
+    });
+
+    row.querySelector('.row-mobile-edit-trigger')?.addEventListener('click', () => {
+      openInlineEditor(row);
+    });
+
+    const cancelLongPress = () => {
+      if (longPressTimer) {
+        window.clearTimeout(longPressTimer);
+        longPressTimer = null;
+      }
+    };
+
+    row.addEventListener('pointerdown', (event) => {
+      if (event.pointerType !== 'touch') {
+        return;
+      }
+
+      if (event.target.closest('.row-action-group') || event.target.closest('.select-column')) {
+        return;
+      }
+
+      const targetCell = event.target.closest('td[data-column-key]');
+      const preferredEditor = targetCell?.querySelector('.row-inline-editor') || null;
+      cancelLongPress();
+      longPressTimer = window.setTimeout(() => {
+        openInlineEditor(row, preferredEditor);
+        longPressTimer = null;
+      }, longPressDelayMs);
+    });
+
+    row.addEventListener('pointerup', cancelLongPress);
+    row.addEventListener('pointercancel', cancelLongPress);
+    row.addEventListener('pointermove', cancelLongPress);
+    row.addEventListener('pointerleave', cancelLongPress);
+
+    row.querySelector('.row-edit-cancel')?.addEventListener('click', () => {
+      closeInlineEditor(row);
+    });
+
+    document
+      .querySelector(`.inventory-editor-row[data-editor-for="${row.dataset.itemId}"] .row-edit-cancel`)
+      ?.addEventListener('click', () => {
+        closeInlineEditor(row);
+      });
+
+  }
+
+  mobileEditorCancel?.addEventListener('click', () => {
+    closeInlineEditor(activeEditingRow);
+  });
+
+  document.addEventListener('keydown', (event) => {
+    if (!['Escape', 'Esc'].includes(event.key) || !activeEditingRow) {
+      return;
+    }
+
+    event.preventDefault();
+    closeInlineEditor(activeEditingRow);
+  });
+
+  document.addEventListener('pointerdown', (event) => {
+    if (!activeEditingRow) {
+      return;
+    }
+
+    const editorRow = document.querySelector(`.inventory-editor-row[data-editor-for="${activeEditingRow.dataset.itemId}"]`);
+    const clickedInsideRow = activeEditingRow.contains(event.target);
+    const clickedInsideEditor = editorRow?.contains(event.target);
+
+    if (clickedInsideRow || clickedInsideEditor) {
+      return;
+    }
+
+    closeInlineEditor(activeEditingRow);
+  });
+
+  if (bulkFieldSelector) {
+    const inputGroups = document.querySelectorAll('[data-bulk-type]');
+    const fieldTypeMap = {
+      category: 'category',
+      location: 'location',
+      count: 'number',
+      size: 'number',
+      price: 'number',
+      purchase_date: 'date',
+      expiry_date: 'date',
+      units: 'text',
+      notes: 'text',
+    };
+
+    const syncBulkInput = () => {
+      const activeType = fieldTypeMap[bulkFieldSelector.value] || 'text';
+      for (const group of inputGroups) {
+        group.classList.toggle('hidden', group.dataset.bulkType !== activeType);
+      }
+    };
+
+    bulkFieldSelector.addEventListener('change', syncBulkInput);
+    syncBulkInput();
+  }
+
+  for (const select of document.querySelectorAll('[data-custom-target]')) {
+    const target = document.getElementById(select.dataset.customTarget);
+    if (!target) {
+      continue;
+    }
+
+    const syncVisibility = () => {
+      const isCustom = select.value === '__custom__';
+      target.classList.toggle('hidden', !isCustom);
+      target.required = isCustom;
+    };
+
+    select.addEventListener('change', syncVisibility);
+    syncVisibility();
+  }
+
+  if (selectAllItems) {
+    selectAllItems.addEventListener('change', () => {
+      for (const checkbox of document.querySelectorAll('.row-selector')) {
+        checkbox.checked = selectAllItems.checked;
+      }
+    });
+  }
+
+  if (inventoryTable) {
+    const headerRow = inventoryTable.querySelector('thead tr');
+    const headers = Array.from(headerRow.querySelectorAll('th[data-column-key]'));
+    const colgroup = inventoryTable.querySelector('colgroup');
+    const bodyRows = Array.from(inventoryTable.querySelectorAll('tbody tr'));
+    const widthStorageKey = 'vv-household-column-widths';
+    const orderStorageKey = 'vv-household-column-order';
+    const fixedKeys = ['select'];
+    let draggedKey = null;
+
+    const getColumnElement = (key) => colgroup.querySelector(`col[data-column-key="${key}"]`);
+    const getHeaderElement = (key) => headerRow.querySelector(`th[data-column-key="${key}"]`);
+    const getCellElement = (row, key) => row.querySelector(`td[data-column-key="${key}"]`);
+    const orderedKeys = () => Array.from(headerRow.querySelectorAll('th[data-column-key]')).map((cell) => cell.dataset.columnKey);
+
+    const savedWidths = (() => {
+      try {
+        return JSON.parse(window.localStorage.getItem(widthStorageKey) || '{}');
+      } catch {
+        return {};
+      }
+    })();
+
+    const saveOrder = () => {
+      const keys = orderedKeys().filter((key) => !fixedKeys.includes(key));
+      window.localStorage.setItem(orderStorageKey, JSON.stringify(keys));
+    };
+
+    const applyOrder = (keys) => {
+      const requested = keys.filter((key) => getHeaderElement(key));
+      const remaining = orderedKeys().filter((key) => !fixedKeys.includes(key) && !requested.includes(key));
+      const finalOrder = [...fixedKeys, ...requested, ...remaining];
+
+      for (const key of finalOrder) {
+        const col = getColumnElement(key);
+        const header = getHeaderElement(key);
+        if (col) {
+          colgroup.appendChild(col);
+        }
+        if (header) {
+          headerRow.appendChild(header);
+        }
+        for (const row of bodyRows) {
+          const cell = getCellElement(row, key);
+          if (cell) {
+            row.appendChild(cell);
+          }
+        }
+      }
+    };
+
+    const savedOrder = (() => {
+      try {
+        return JSON.parse(window.localStorage.getItem(orderStorageKey) || '[]');
+      } catch {
+        return [];
+      }
+    })();
+
+    applyOrder(savedOrder);
+
+    for (const header of headerRow.querySelectorAll('th[data-column-key]')) {
+      const key = header.dataset.columnKey;
+      const width = savedWidths[key];
+      const col = getColumnElement(key);
+      if (!key || !width) {
+        continue;
+      }
+      header.style.width = `${width}px`;
+      if (col) {
+        col.style.width = `${width}px`;
+      }
+    }
+
+    for (const header of headerRow.querySelectorAll('th[data-column-key]')) {
+      const key = header.dataset.columnKey;
+      const handle = header.querySelector('.column-resizer');
+      if (!handle || fixedKeys.includes(key)) {
+        continue;
+      }
+
+      handle.addEventListener('mousedown', (event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        const startX = event.clientX;
+        const startWidth = header.getBoundingClientRect().width;
+        const col = getColumnElement(key);
+
+        const onMouseMove = (moveEvent) => {
+          const nextWidth = Math.max(90, startWidth + moveEvent.clientX - startX);
+          header.style.width = `${nextWidth}px`;
+          if (col) {
+            col.style.width = `${nextWidth}px`;
+          }
+        };
+
+        const onMouseUp = () => {
+          const finalWidth = header.getBoundingClientRect().width;
+          savedWidths[key] = finalWidth;
+          window.localStorage.setItem(widthStorageKey, JSON.stringify(savedWidths));
+          document.removeEventListener('mousemove', onMouseMove);
+          document.removeEventListener('mouseup', onMouseUp);
+        };
+
+        document.addEventListener('mousemove', onMouseMove);
+        document.addEventListener('mouseup', onMouseUp);
+      });
+    }
+
+    for (const header of headerRow.querySelectorAll('th[data-column-key]')) {
+      const targetKey = header.dataset.columnKey;
+      if (fixedKeys.includes(targetKey)) {
+        continue;
+      }
+
+      header.addEventListener('dragstart', (event) => {
+        if (event.target.closest('.column-resizer')) {
+          event.preventDefault();
+          return;
+        }
+
+        draggedKey = targetKey;
+        event.dataTransfer.effectAllowed = 'move';
+        event.dataTransfer.setData('text/plain', draggedKey);
+        header.classList.add('column-drag-handle-active');
+      });
+
+      header.addEventListener('dragend', () => {
+        draggedKey = null;
+        header.classList.remove('column-drag-handle-active');
+        for (const header of headerRow.querySelectorAll('th[data-column-key]')) {
+          header.classList.remove('column-drop-target');
+        }
+      });
+
+      header.addEventListener('dragover', (event) => {
+        if (!draggedKey || draggedKey === targetKey) {
+          return;
+        }
+        event.preventDefault();
+        header.classList.add('column-drop-target');
+      });
+
+      header.addEventListener('dragleave', () => {
+        header.classList.remove('column-drop-target');
+      });
+
+      header.addEventListener('drop', (event) => {
+        if (!draggedKey || draggedKey === targetKey) {
+          return;
+        }
+        event.preventDefault();
+        header.classList.remove('column-drop-target');
+
+        const currentOrder = orderedKeys().filter((key) => !fixedKeys.includes(key));
+        const fromIndex = currentOrder.indexOf(draggedKey);
+        const toIndex = currentOrder.indexOf(targetKey);
+        if (fromIndex === -1 || toIndex === -1) {
+          return;
+        }
+
+        currentOrder.splice(fromIndex, 1);
+        currentOrder.splice(toIndex, 0, draggedKey);
+        applyOrder(currentOrder);
+        saveOrder();
+      });
+    }
+  }
+</script>

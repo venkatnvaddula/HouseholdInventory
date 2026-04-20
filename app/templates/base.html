@@ -1,0 +1,23 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{{ request.app.title }}</title>
+    <link rel="stylesheet" href="{{ url_for('static', path='styles.css') }}" />
+    <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
+  </head>
+  <body>
+    <main class="shell">
+      {% block page_header %}
+        <header class="page-header">
+          <div>
+            <p class="eyebrow">VV Household</p>
+            <h1>{{ request.app.title }}</h1>
+          </div>
+        </header>
+      {% endblock %}
+      {% block content %}{% endblock %}
+    </main>
+  </body>
+</html>

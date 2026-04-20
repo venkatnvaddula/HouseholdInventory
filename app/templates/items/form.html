@@ -1,0 +1,112 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="form-shell">
+    <div>
+      <p class="eyebrow">Inventory entry</p>
+      <h2>{{ page_title }}</h2>
+    </div>
+
+    <form class="item-form" method="post" action="{{ form_action }}">
+      <label>
+        <span>Name</span>
+        <input name="name" list="item-name-suggestions" required value="{{ item.name if item else '' }}" />
+        <datalist id="item-name-suggestions">
+          {% for item_name in item_names %}
+            <option value="{{ item_name }}"></option>
+          {% endfor %}
+        </datalist>
+      </label>
+
+      <div class="form-row">
+        <label>
+          <span>Category</span>
+          <select name="category" data-custom-target="category-custom">
+            {% for option in category_options %}
+              <option value="{{ option }}" {% if category_value == option %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+            <option value="__custom__" {% if category_value == '__custom__' %}selected{% endif %}>Add new...</option>
+          </select>
+          <input
+            id="category-custom"
+            class="custom-option-input {% if category_value != '__custom__' %}hidden{% endif %}"
+            name="category_custom"
+            placeholder="Enter a new category"
+            value="{{ category_custom }}"
+          />
+        </label>
+        <label>
+          <span>Location</span>
+          <select name="location" data-custom-target="location-custom">
+            {% for option in location_options %}
+              <option value="{{ option }}" {% if location_value == option %}selected{% endif %}>{{ option }}</option>
+            {% endfor %}
+            <option value="__custom__" {% if location_value == '__custom__' %}selected{% endif %}>Add new...</option>
+          </select>
+          <input
+            id="location-custom"
+            class="custom-option-input {% if location_value != '__custom__' %}hidden{% endif %}"
+            name="location_custom"
+            placeholder="Enter a new location"
+            value="{{ location_custom }}"
+          />
+        </label>
+      </div>
+
+      <div class="form-row form-row-tight">
+        <label>
+          <span>Count</span>
+          <input name="count" type="number" step="1" min="0" value="{{ item.count if item else '1' }}" />
+        </label>
+        <label>
+          <span>Size</span>
+          <input name="size" type="number" step="0.01" min="0" value="{{ item.size if item else '1' }}" />
+        </label>
+        <label>
+          <span>Units</span>
+          <input name="units" value="{{ item.units if item else '' }}" placeholder="lbs, oz, item, ..." />
+        </label>
+        <label>
+          <span>Price</span>
+          <input name="price" inputmode="decimal" value="{{ item.price if item and item.price is not none else '' }}" />
+        </label>
+      </div>
+
+      <div class="form-row">
+        <label>
+          <span>Purchase date</span>
+          <input name="purchase_date" type="date" value="{{ item.purchase_date.isoformat() if item and item.purchase_date else today_value }}" />
+        </label>
+        <label>
+          <span>Expiry date</span>
+          <input name="expiry_date" type="date" value="{{ item.expiry_date.isoformat() if item and item.expiry_date else '' }}" />
+        </label>
+      </div>
+
+      <label>
+        <span>Notes</span>
+        <textarea name="notes" rows="4">{{ item.notes if item and item.notes else '' }}</textarea>
+      </label>
+
+      <div class="card-actions">
+        <button class="button" type="submit">Save item</button>
+        <a class="button button-secondary" href="/items">Cancel</a>
+      </div>
+    </form>
+  </section>
+
+  <script>
+    for (const select of document.querySelectorAll('[data-custom-target]')) {
+      const target = document.getElementById(select.dataset.customTarget);
+
+      const syncVisibility = () => {
+        const isCustom = select.value === '__custom__';
+        target.classList.toggle('hidden', !isCustom);
+        target.required = isCustom;
+      };
+
+      select.addEventListener('change', syncVisibility);
+      syncVisibility();
+    }
+  </script>
+{% endblock %}
