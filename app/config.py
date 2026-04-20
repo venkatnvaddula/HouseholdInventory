@@ -8,6 +8,8 @@ class Settings(BaseSettings):
     app_name: str = "VV Household"
     database_url: str = "postgresql+psycopg://household_inventory:household_inventory@localhost:5432/household_inventory"
     session_secret: str = "dev-session-secret-change-me"
+    email_verification_max_age_seconds: int = 60 * 60 * 24
+    password_reset_max_age_seconds: int = 60 * 60
 
     model_config = SettingsConfigDict(
         env_file=".env",

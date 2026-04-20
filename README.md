@@ -11,6 +11,8 @@ The app helps a household keep one up-to-date inventory instead of maintaining s
 Current capabilities include:
 
 - Shared household accounts with login/logout
+- Email verification flow
+- Password reset flow
 - One household with multiple users and owner/member roles
 - Add, edit, search, sort, and soft-delete inventory items
 - Inline table editing on desktop and mobile
@@ -75,6 +77,20 @@ The first account created for a household becomes the owner.
 ### Log In
 
 Open `/login` and sign in with your household account.
+
+If your account is not verified yet, request a verification link first.
+
+### Verify Email
+
+Open `/verify-email/request` to generate a verification link.
+
+In development, the app shows a preview link directly in the browser instead of sending a real email.
+
+### Reset Password
+
+Open `/password-reset/request` to generate a password reset link.
+
+In development, the app shows a preview link directly in the browser instead of sending a real email.
 
 ### Manage Household Members
 
@@ -243,8 +259,6 @@ This app requires:
 - a PostgreSQL database
 - session secret configuration
 
-It is not suitable for GitHub Pages because it is not a static site.
-
 Platforms that fit better include:
 
 - AWS
@@ -257,8 +271,6 @@ Platforms that fit better include:
 
 A few things are intentionally simple right now:
 
-- no password reset flow
-- no email verification flow
 - no invite-token flow yet for new household members
 - no multi-household switching per user
 

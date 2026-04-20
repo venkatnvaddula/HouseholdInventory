@@ -1,4 +1,5 @@
 from collections.abc import Generator
+import re
 
 import pytest
 from fastapi.testclient import TestClient
@@ -9,6 +10,24 @@ from app.db import get_db_session
 from app.main import create_app
 from app.models.base import Base
 from app.models.household import Household
+
+
+def _extract_preview_path(response_text: str, route_prefix: str) -> str:
+    match = re.search(rf'value="([^"]+/{route_prefix}\?token=[^"]+)"', response_text)
+    assert match is not None
+    return "/" + match.group(1).split("/", 3)[3]
+
+
+def _verify_user(app_client: TestClient, email: str) -> None:
+    response = app_client.post(
+        "/verify-email/request",
+        data={"email": email},
+        follow_redirects=False,
+    )
+    assert response.status_code == 200
+    verify_path = _extract_preview_path(response.text, "verify-email")
+    verify_response = app_client.get(verify_path, follow_redirects=False)
+    assert verify_response.status_code == 200
 
 
 @pytest.fixture
@@ -53,7 +72,16 @@ def client(app_client: TestClient) -> TestClient:
         },
         follow_redirects=False,
     )
-    assert response.status_code == 303
+    assert response.status_code == 201
+    path = _extract_preview_path(response.text, "verify-email")
+    verify_response = app_client.get(path, follow_redirects=False)
+    assert verify_response.status_code == 200
+    login_response = app_client.post(
+        "/login",
+        data={"email": "venkat@example.com", "password": "supersecret123"},
+        follow_redirects=False,
+    )
+    assert login_response.status_code == 303
     return app_client
 
 
@@ -71,10 +99,82 @@ def test_inventory_requires_login(app_client: TestClient) -> None:
     assert response.headers["location"] == "/login"
 
 
+def test_register_requires_verification_before_login(app_client: TestClient) -> None:
+    register_response = app_client.post(
+        "/register",
+        data={
+            "display_name": "Venkat",
+            "email": "venkat@example.com",
+            "password": "supersecret123",
+            "household_name": "Primary Household",
+        },
+        follow_redirects=False,
+    )
+
+    assert register_response.status_code == 201
+    assert "Verify your email before logging in" in register_response.text
+
+    login_response = app_client.post(
+        "/login",
+        data={"email": "venkat@example.com", "password": "supersecret123"},
+        follow_redirects=False,
+    )
+
+    assert login_response.status_code == 400
+    assert "Verify your email before logging in" in login_response.text
+
+
 def test_household_visible_name_hides_numeric_suffix() -> None:
     household = Household(name="VV Household 3")
 
     assert household.visible_name == "VV Household"
+
+
+def test_password_reset_flow_updates_password(app_client: TestClient) -> None:
+    register_response = app_client.post(
+        "/register",
+        data={
+            "display_name": "Venkat",
+            "email": "venkat@example.com",
+            "password": "supersecret123",
+            "household_name": "Primary Household",
+        },
+        follow_redirects=False,
+    )
+    verify_path = _extract_preview_path(register_response.text, "verify-email")
+    app_client.get(verify_path)
+
+    reset_response = app_client.post(
+        "/password-reset/request",
+        data={"email": "venkat@example.com"},
+        follow_redirects=False,
+    )
+
+    assert reset_response.status_code == 200
+    reset_path = _extract_preview_path(reset_response.text, "password-reset")
+
+    password_form_response = app_client.get(reset_path)
+    assert password_form_response.status_code == 200
+
+    submit_response = app_client.post(
+        "/password-reset",
+        data={
+            "token": reset_path.split("token=", 1)[1],
+            "password": "newsecret123",
+            "confirm_password": "newsecret123",
+        },
+        follow_redirects=False,
+    )
+
+    assert submit_response.status_code == 200
+    assert "Your password has been updated" in submit_response.text
+
+    login_response = app_client.post(
+        "/login",
+        data={"email": "venkat@example.com", "password": "newsecret123"},
+        follow_redirects=False,
+    )
+    assert login_response.status_code == 303
 
 
 def test_create_item_adds_inventory_row(client: TestClient) -> None:
@@ -170,7 +270,7 @@ def test_items_page_renders_double_click_inline_editing(client: TestClient) -> N
     assert 'action="/logout"' in response.text
     assert '>Log out<' in response.text
     assert "Venkat" in response.text
-    assert "Primary Household has 1 item" in response.text
+    assert "1 item in inventory" in response.text
     assert 'class="row-cell-display"' in response.text
     assert 'class="row-edit-input row-inline-editor"' in response.text
     assert 'class="inventory-editor-row"' in response.text
@@ -219,7 +319,7 @@ def test_search_filters_inventory_results(client: TestClient) -> None:
     response = client.get("/items?search=Soup")
 
     assert response.status_code == 200
-    assert "Primary Household has 1 item" in response.text
+    assert "1 item in inventory" in response.text
     assert "Tomato Soup" in response.text
     assert "Shampoo" not in response.text
 
@@ -423,7 +523,7 @@ def test_bulk_edit_name_updates_selected_items(client: TestClient) -> None:
 
 
 def test_owner_can_add_member_and_member_sees_shared_inventory(app_client: TestClient) -> None:
-    app_client.post(
+    register_response = app_client.post(
         "/register",
         data={
             "display_name": "Venkat",
@@ -431,8 +531,17 @@ def test_owner_can_add_member_and_member_sees_shared_inventory(app_client: TestC
             "password": "supersecret123",
             "household_name": "Primary Household",
         },
-        follow_redirects=True,
+        follow_redirects=False,
     )
+    assert register_response.status_code == 201
+    owner_verify_path = _extract_preview_path(register_response.text, "verify-email")
+    app_client.get(owner_verify_path, follow_redirects=False)
+    owner_login_response = app_client.post(
+        "/login",
+        data={"email": "venkat@example.com", "password": "supersecret123"},
+        follow_redirects=False,
+    )
+    assert owner_login_response.status_code == 303
 
     app_client.post(
         "/items",
@@ -468,6 +577,8 @@ def test_owner_can_add_member_and_member_sees_shared_inventory(app_client: TestC
 
     app_client.post("/logout", follow_redirects=False)
 
+    _verify_user(app_client, "spouse@example.com")
+
     member_response = app_client.post(
         "/login",
         data={"email": "spouse@example.com", "password": "sharedhouse123"},
@@ -476,4 +587,3 @@ def test_owner_can_add_member_and_member_sees_shared_inventory(app_client: TestC
 
     assert member_response.status_code == 200
     assert "Coffee" in member_response.text
-    assert "Primary Household" in member_response.text
