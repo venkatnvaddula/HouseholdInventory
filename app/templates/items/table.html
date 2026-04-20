@@ -1,7 +1,4 @@
 <section id="item-table" class="table-shell">
-  <div class="table-summary">
-    <p class="table-summary-count">{{ items|length }} {{ 'item' if items|length == 1 else 'items' }} in current inventory</p>
-  </div>
   {% if items %}
     <form id="bulk-edit-form" class="bulk-edit-form" method="post" action="/items/bulk-update">
       <input type="hidden" name="sort_by" value="{{ sort_by }}" />
@@ -89,6 +86,18 @@
         </div>
       </div>
     </form>
+
+    <section class="toolbar table-toolbar">
+      <div class="toolbar-actions">
+        <form class="search-form" method="get" action="/items">
+          <input type="hidden" name="sort_by" value="{{ sort_by }}" />
+          <input type="hidden" name="sort_dir" value="{{ sort_dir }}" />
+          <input name="search" placeholder="Search name, category, location, notes..." value="{{ search }}" />
+          <button class="button button-secondary" type="submit">Search</button>
+          <a class="button toolbar-add-item-button" href="/items/new">Add item</a>
+        </form>
+      </div>
+    </section>
 
     <div class="table-scroll">
       <table class="inventory-table">
@@ -231,6 +240,18 @@
       <button id="mobile-editor-cancel" class="button button-secondary" type="button">Cancel</button>
     </div>
   {% else %}
+    <section class="toolbar table-toolbar">
+      <div class="toolbar-actions">
+        <form class="search-form" method="get" action="/items">
+          <input type="hidden" name="sort_by" value="{{ sort_by }}" />
+          <input type="hidden" name="sort_dir" value="{{ sort_dir }}" />
+          <input name="search" placeholder="Search name, category, location, notes..." value="{{ search }}" />
+          <button class="button button-secondary" type="submit">Search</button>
+          <a class="button toolbar-add-item-button" href="/items/new">Add item</a>
+        </form>
+      </div>
+    </section>
+
     <article class="empty-state">
       {% if search %}
         <h3>No items found</h3>

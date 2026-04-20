@@ -7,6 +7,7 @@ class Settings(BaseSettings):
     app_env: str = "development"
     app_name: str = "VV Household"
     database_url: str = "postgresql+psycopg://household_inventory:household_inventory@localhost:5432/household_inventory"
+    session_secret: str = "dev-session-secret-change-me"
 
     model_config = SettingsConfigDict(
         env_file=".env",

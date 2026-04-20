@@ -9,7 +9,9 @@ from fastapi.templating import Jinja2Templates
 from sqlalchemy.exc import ProgrammingError
 from sqlalchemy.orm import Session
 
+from app.auth import require_auth_context
 from app.db import get_db_session
+from app.services.accounts import AuthContext
 from app.services.items import (
     CATEGORY_OPTIONS,
     DEFAULT_SORT_BY,
@@ -61,6 +63,7 @@ def _next_sort_dir(current_sort_by: str, current_sort_dir: str, column: str) -> 
 
 def _table_context(
     request: Request,
+    auth_context: AuthContext,
     items,
     *,
     search: str,
@@ -70,6 +73,8 @@ def _table_context(
     return {
         "bulk_edit_fields": BULK_EDIT_FIELDS,
         "category_options": CATEGORY_OPTIONS,
+        "current_household": auth_context.household,
+        "current_user": auth_context.user,
         "items": items,
         "location_options": LOCATION_OPTIONS,
         "request": request,
@@ -131,8 +136,8 @@ def _table_context(
     }
 
 
-def _item_form_context(session: Session, item) -> dict[str, object]:
-    item_names = list_item_names(session)
+def _item_form_context(session: Session, auth_context: AuthContext, item) -> dict[str, object]:
+    item_names = list_item_names(session, auth_context.household.id)
     today_value = date.today().isoformat()
 
     category_value = item.category if item else "Food"
@@ -142,6 +147,8 @@ def _item_form_context(session: Session, item) -> dict[str, object]:
         "category_custom": category_value if category_value not in CATEGORY_OPTIONS else "",
         "category_options": CATEGORY_OPTIONS,
         "category_value": category_value if category_value in CATEGORY_OPTIONS else "__custom__",
+        "current_household": auth_context.household,
+        "current_user": auth_context.user,
         "item": item,
         "item_names": item_names,
         "location_custom": location_value if location_value not in LOCATION_OPTIONS else "",
@@ -154,6 +161,7 @@ def _item_form_context(session: Session, item) -> dict[str, object]:
 def _render_item_table(
     request: Request,
     session: Session,
+    auth_context: AuthContext,
     sort_by: str,
     sort_dir: str,
     search: str,
@@ -162,6 +170,7 @@ def _render_item_table(
     try:
         items = list_items(
             session,
+            auth_context.household.id,
             sort_by=sort_by,
             sort_dir=sort_dir,
             search=search,
@@ -177,6 +186,7 @@ def _render_item_table(
         "items/table.html",
         _table_context(
             request,
+            auth_context,
             items,
             search=search,
             sort_by=sort_by,
@@ -187,6 +197,7 @@ def _render_item_table(
 
 def _csv_export_response(
     session: Session,
+    household_id: int,
     sort_by: str,
     sort_dir: str,
     search: str,
@@ -195,6 +206,7 @@ def _csv_export_response(
     try:
         items = list_items(
             session,
+            household_id,
             sort_by=sort_by,
             sort_dir=sort_dir,
             search=search,
@@ -243,9 +255,9 @@ def _csv_export_response(
     )
 
 
-def _history_csv_export_response(session: Session) -> StreamingResponse:
+def _history_csv_export_response(session: Session, household_id: int) -> StreamingResponse:
     try:
-        items = list_item_history(session)
+        items = list_item_history(session, household_id)
     except ProgrammingError as exc:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -307,12 +319,14 @@ def items_page(
     search: str = "",
     sort_by: str = DEFAULT_SORT_BY,
     sort_dir: str = DEFAULT_SORT_DIR,
+    auth_context: AuthContext = Depends(require_auth_context),
     session: Session = Depends(get_db_session),
 ) -> HTMLResponse:
     sort_by, sort_dir = _sanitize_sort(sort_by, sort_dir)
     try:
         items = list_items(
             session,
+            auth_context.household.id,
             sort_by=sort_by,
             sort_dir=sort_dir,
             search=search,
@@ -328,6 +342,7 @@ def items_page(
         "items/list.html",
         _table_context(
             request,
+            auth_context,
             items,
             search=search,
             sort_by=sort_by,
@@ -342,9 +357,10 @@ def items_table(
     search: str = "",
     sort_by: str = DEFAULT_SORT_BY,
     sort_dir: str = DEFAULT_SORT_DIR,
+    auth_context: AuthContext = Depends(require_auth_context),
     session: Session = Depends(get_db_session),
 ) -> HTMLResponse:
-    return _render_item_table(request, session, sort_by, sort_dir, search)
+    return _render_item_table(request, session, auth_context, sort_by, sort_dir, search)
 
 
 @router.get("/items/export.csv")
@@ -352,16 +368,18 @@ def export_items_csv(
     search: str = "",
     sort_by: str = DEFAULT_SORT_BY,
     sort_dir: str = DEFAULT_SORT_DIR,
+    auth_context: AuthContext = Depends(require_auth_context),
     session: Session = Depends(get_db_session),
 ) -> StreamingResponse:
-    return _csv_export_response(session, sort_by, sort_dir, search)
+    return _csv_export_response(session, auth_context.household.id, sort_by, sort_dir, search)
 
 
 @router.get("/items/export-history.csv")
 def export_items_history_csv(
+    auth_context: AuthContext = Depends(require_auth_context),
     session: Session = Depends(get_db_session),
 ) -> StreamingResponse:
-    return _history_csv_export_response(session)
+    return _history_csv_export_response(session, auth_context.household.id)
 
 
 @router.post("/items/bulk-update")
@@ -378,6 +396,7 @@ def bulk_update_items_action(
     search: str = Form(""),
     sort_by: str = Form(DEFAULT_SORT_BY),
     sort_dir: str = Form(DEFAULT_SORT_DIR),
+    auth_context: AuthContext = Depends(require_auth_context),
     session: Session = Depends(get_db_session),
 ) -> RedirectResponse:
     sort_by, sort_dir = _sanitize_sort(sort_by, sort_dir)
@@ -392,7 +411,13 @@ def bulk_update_items_action(
     elif field in {"purchase_date", "expiry_date"}:
         bulk_value = date_value
 
-    bulk_update_items(session, item_ids=item_ids, field=field, value=bulk_value)
+    bulk_update_items(
+        session,
+        household_id=auth_context.household.id,
+        item_ids=item_ids,
+        field=field,
+        value=bulk_value,
+    )
 
     target = f"/items?search={search}&sort_by={sort_by}&sort_dir={sort_dir}"
     return RedirectResponse(url=target, status_code=status.HTTP_303_SEE_OTHER)
@@ -404,17 +429,22 @@ def bulk_delete_items_action(
     search: str = Form(""),
     sort_by: str = Form(DEFAULT_SORT_BY),
     sort_dir: str = Form(DEFAULT_SORT_DIR),
+    auth_context: AuthContext = Depends(require_auth_context),
     session: Session = Depends(get_db_session),
 ) -> RedirectResponse:
     sort_by, sort_dir = _sanitize_sort(sort_by, sort_dir)
-    bulk_delete_items(session, item_ids=item_ids)
+    bulk_delete_items(session, household_id=auth_context.household.id, item_ids=item_ids)
 
     target = f"/items?search={search}&sort_by={sort_by}&sort_dir={sort_dir}"
     return RedirectResponse(url=target, status_code=status.HTTP_303_SEE_OTHER)
 
 
 @router.get("/items/new", response_class=HTMLResponse)
-def new_item_page(request: Request, session: Session = Depends(get_db_session)) -> HTMLResponse:
+def new_item_page(
+    request: Request,
+    auth_context: AuthContext = Depends(require_auth_context),
+    session: Session = Depends(get_db_session),
+) -> HTMLResponse:
     return templates.TemplateResponse(
         request,
         "items/form.html",
@@ -422,7 +452,7 @@ def new_item_page(request: Request, session: Session = Depends(get_db_session)) 
             "form_action": "/items",
             "page_title": "Add item",
             "request": request,
-            **_item_form_context(session, None),
+            **_item_form_context(session, auth_context, None),
         },
     )
 
@@ -441,12 +471,14 @@ def create_item_action(
     purchase_date: date = Form(default_factory=date.today),
     expiry_date: date | None = Form(None),
     notes: str = Form(""),
+    auth_context: AuthContext = Depends(require_auth_context),
     session: Session = Depends(get_db_session),
 ) -> RedirectResponse:
     category_value = normalize_choice(category, category_custom, "Food")
     location_value = normalize_choice(location, location_custom, "Pantry")
     create_item(
         session,
+        household_id=auth_context.household.id,
         name=name,
         category=category_value,
         count=count,
@@ -465,9 +497,10 @@ def create_item_action(
 def edit_item_page(
     item_id: int,
     request: Request,
+    auth_context: AuthContext = Depends(require_auth_context),
     session: Session = Depends(get_db_session),
 ) -> HTMLResponse:
-    item = get_item(session, item_id)
+    item = get_item(session, auth_context.household.id, item_id)
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
 
@@ -478,7 +511,7 @@ def edit_item_page(
             "form_action": f"/items/{item_id}",
             "page_title": "Edit item",
             "request": request,
-            **_item_form_context(session, item),
+            **_item_form_context(session, auth_context, item),
         },
     )
 
@@ -501,10 +534,11 @@ def update_item_action(
     search: str = "",
     sort_by: str = DEFAULT_SORT_BY,
     sort_dir: str = DEFAULT_SORT_DIR,
+    auth_context: AuthContext = Depends(require_auth_context),
     session: Session = Depends(get_db_session),
 ) -> RedirectResponse:
     sort_by, sort_dir = _sanitize_sort(sort_by, sort_dir)
-    item = get_item(session, item_id)
+    item = get_item(session, auth_context.household.id, item_id)
     if item is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Item not found")
 
@@ -536,7 +570,8 @@ def delete_item_action(
     search: str = "",
     sort_by: str = DEFAULT_SORT_BY,
     sort_dir: str = DEFAULT_SORT_DIR,
+    auth_context: AuthContext = Depends(require_auth_context),
     session: Session = Depends(get_db_session),
 ) -> HTMLResponse:
-    delete_item(session, item_id)
-    return _render_item_table(request, session, sort_by, sort_dir, search)
+    delete_item(session, auth_context.household.id, item_id)
+    return _render_item_table(request, session, auth_context, sort_by, sort_dir, search)

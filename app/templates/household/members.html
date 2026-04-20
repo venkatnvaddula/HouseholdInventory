@@ -1,0 +1,68 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="form-shell auth-shell">
+    <div>
+      <p class="eyebrow">Household members</p>
+      <h2>{{ current_household.visible_name }}</h2>
+      <p class="form-help">Owners can add accounts to the shared inventory and remove members when needed.</p>
+    </div>
+
+    {% if error_message %}
+      <p class="error-banner">{{ error_message }}</p>
+    {% endif %}
+
+    <div class="member-list">
+      {% for member in members %}
+        <article class="member-row">
+          <div>
+            <h3>{{ member.user.display_name }}</h3>
+            <p>{{ member.user.email }}</p>
+          </div>
+          <div class="page-header-links">
+            <span class="pill">{{ member.role }}</span>
+            {% if current_user.id != member.user_id and current_user %}
+              <form method="post" action="/household/members/{{ member.id }}/remove">
+                <button class="button button-secondary button-small" type="submit">Remove</button>
+              </form>
+            {% endif %}
+          </div>
+        </article>
+      {% endfor %}
+    </div>
+
+    <form class="item-form" method="post" action="/household/members">
+      <div>
+        <p class="eyebrow">Add member</p>
+        <p class="form-help">If the email already has an account, it will be added to this household. Password is only used for a new account.</p>
+      </div>
+      <div class="form-row">
+        <label>
+          <span>Email</span>
+          <input name="email" type="email" required />
+        </label>
+        <label>
+          <span>Display name</span>
+          <input name="display_name" />
+        </label>
+      </div>
+      <div class="form-row">
+        <label>
+          <span>Temporary password</span>
+          <input name="password" type="password" minlength="8" />
+        </label>
+        <label>
+          <span>Role</span>
+          <select name="role">
+            <option value="member">Member</option>
+            <option value="owner">Owner</option>
+          </select>
+        </label>
+      </div>
+      <div class="card-actions">
+        <button class="button" type="submit">Add member</button>
+        <a class="button button-secondary" href="/items">Back to inventory</a>
+      </div>
+    </form>
+  </section>
+{% endblock %}

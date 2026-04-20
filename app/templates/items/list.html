@@ -3,26 +3,13 @@
 {% block page_header %}
   <section class="hero-card hero-card-primary">
     <div>
-      <p class="eyebrow">Household Inventory</p>
-      <h1>{{ request.app.title }}</h1>
       <p class="hero-lede">Keep the pantry, fridge, and storage in sync.</p>
       <p>Track what you already have, what needs restocking, and what is already in the house before anyone re-buys it.</p>
+      <p class="hero-supporting table-summary-count">{{ items|length }} {{ 'item' if items|length == 1 else 'items' }} in inventory</p>
     </div>
   </section>
 {% endblock %}
 
 {% block content %}
-  <section class="toolbar">
-    <div class="toolbar-actions">
-      <form class="search-form" method="get" action="/items">
-        <input type="hidden" name="sort_by" value="{{ sort_by }}" />
-        <input type="hidden" name="sort_dir" value="{{ sort_dir }}" />
-        <input name="search" placeholder="Search name, category, location, notes..." value="{{ search }}" />
-        <button class="button button-secondary" type="submit">Search</button>
-        <a class="button toolbar-add-item-button" href="/items/new">Add item</a>
-      </form>
-    </div>
-  </section>
-
   {% include "items/table.html" %}
 {% endblock %}

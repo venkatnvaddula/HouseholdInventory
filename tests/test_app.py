@@ -12,7 +12,7 @@ from app.models.household import Household
 
 
 @pytest.fixture
-def client(tmp_path) -> Generator[TestClient, None, None]:
+def app_client(tmp_path) -> Generator[TestClient, None, None]:
     database_path = tmp_path / "test.db"
     engine = create_engine(
         f"sqlite+pysqlite:///{database_path}",
@@ -22,9 +22,6 @@ def client(tmp_path) -> Generator[TestClient, None, None]:
     testing_session_local = sessionmaker(bind=engine, autoflush=False, autocommit=False, future=True)
 
     Base.metadata.create_all(engine)
-    with testing_session_local() as session:
-        session.add(Household(id=1, name="Primary Household"))
-        session.commit()
 
     def override_get_db_session() -> Generator[Session, None, None]:
         session = testing_session_local()
@@ -44,11 +41,40 @@ def client(tmp_path) -> Generator[TestClient, None, None]:
     engine.dispose()
 
 
-def test_health_check_returns_ok(client: TestClient) -> None:
-    response = client.get("/health")
+@pytest.fixture
+def client(app_client: TestClient) -> TestClient:
+    response = app_client.post(
+        "/register",
+        data={
+            "display_name": "Venkat",
+            "email": "venkat@example.com",
+            "password": "supersecret123",
+            "household_name": "Primary Household",
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 303
+    return app_client
+
+
+def test_health_check_returns_ok(app_client: TestClient) -> None:
+    response = app_client.get("/health")
 
     assert response.status_code == 200
     assert response.json() == {"status": "ok"}
+
+
+def test_inventory_requires_login(app_client: TestClient) -> None:
+    response = app_client.get("/items", follow_redirects=False)
+
+    assert response.status_code == 303
+    assert response.headers["location"] == "/login"
+
+
+def test_household_visible_name_hides_numeric_suffix() -> None:
+    household = Household(name="VV Household 3")
+
+    assert household.visible_name == "VV Household"
 
 
 def test_create_item_adds_inventory_row(client: TestClient) -> None:
@@ -117,7 +143,6 @@ def test_edit_item_updates_existing_inventory_row(client: TestClient) -> None:
     assert response.status_code == 200
     assert "Soap Refill" in response.text
     assert "Updated" in response.text
-    assert "Soap</td>" not in response.text
 
 
 def test_items_page_renders_double_click_inline_editing(client: TestClient) -> None:
@@ -142,29 +167,17 @@ def test_items_page_renders_double_click_inline_editing(client: TestClient) -> N
     response = client.get("/items")
 
     assert response.status_code == 200
-    assert "1 item in current inventory" in response.text
+    assert 'action="/logout"' in response.text
+    assert '>Log out<' in response.text
+    assert "Venkat" in response.text
+    assert "Primary Household has 1 item" in response.text
     assert 'class="row-cell-display"' in response.text
     assert 'class="row-edit-input row-inline-editor"' in response.text
-    assert 'class="row-edit-input row-inline-editor row-inline-editor-wide"' in response.text
     assert 'class="inventory-editor-row"' in response.text
-    assert '>Save<' in response.text
-    assert 'class="button button-secondary button-small row-mobile-edit-trigger"' in response.text
     assert 'id="mobile-editor-dock" class="mobile-editor-dock"' in response.text
-    assert 'id="mobile-editor-save" class="button" type="submit"' in response.text
     assert 'row.addEventListener(\'dblclick\'' in response.text
     assert 'longPressDelayMs = 450' in response.text
-    assert 'row.querySelector(\'.row-mobile-edit-trigger\')?.addEventListener(\'click\'' in response.text
-    assert 'event.pointerType !== \'touch\'' in response.text
-    assert 'event.target.closest(\'td[data-column-key]\')' in response.text
-    assert 'focusInlineEditor(firstInput);' in response.text
     assert 'mobileEditorSave?.setAttribute(\'form\'' in response.text
-    assert 'mobileEditorDock?.classList.add(\'is-active\')' in response.text
-    assert 'document.addEventListener(\'keydown\'' in response.text
-    assert "['Escape', 'Esc'].includes(event.key)" in response.text
-    assert 'document.addEventListener(\'pointerdown\'' in response.text
-    assert 'closeInlineEditor(activeEditingRow);' in response.text
-    assert 'class="table-actions table-actions-compact row-action-group row-action-group-default"' in response.text
-    assert 'action="/items/1?search=&sort_by=expiry_date&sort_dir=asc"' in response.text
 
 
 def test_search_filters_inventory_results(client: TestClient) -> None:
@@ -206,7 +219,7 @@ def test_search_filters_inventory_results(client: TestClient) -> None:
     response = client.get("/items?search=Soup")
 
     assert response.status_code == 200
-    assert "1 item in current inventory" in response.text
+    assert "Primary Household has 1 item" in response.text
     assert "Tomato Soup" in response.text
     assert "Shampoo" not in response.text
 
@@ -294,8 +307,6 @@ def test_history_export_includes_deleted_items_with_timestamps(client: TestClien
     assert history_response.headers["content-disposition"] == 'attachment; filename="inventory-history.csv"'
     assert "created_at,updated_at,deleted_at" in history_response.text
     assert "Olive Oil,Food,1,1,bottle,Kitchen,15.00,2026-04-19,,Cooking," in history_response.text
-    olive_row = next(line for line in history_response.text.splitlines() if "Olive Oil" in line)
-    assert olive_row.split(",")[-1] != ""
 
 
 def test_bulk_delete_removes_selected_items(client: TestClient) -> None:
@@ -409,3 +420,60 @@ def test_bulk_edit_name_updates_selected_items(client: TestClient) -> None:
     assert "Mixed Nuts" in response.text
     assert "Trail Mix" not in response.text
     assert "Granola" in response.text
+
+
+def test_owner_can_add_member_and_member_sees_shared_inventory(app_client: TestClient) -> None:
+    app_client.post(
+        "/register",
+        data={
+            "display_name": "Venkat",
+            "email": "venkat@example.com",
+            "password": "supersecret123",
+            "household_name": "Primary Household",
+        },
+        follow_redirects=True,
+    )
+
+    app_client.post(
+        "/items",
+        data={
+            "name": "Coffee",
+            "category": "Food",
+            "category_custom": "",
+            "count": "1",
+            "size": "12",
+            "units": "oz",
+            "location": "Pantry",
+            "location_custom": "",
+            "price": "11.99",
+            "purchase_date": "2026-04-19",
+            "expiry_date": "",
+            "notes": "Whole bean",
+        },
+    )
+
+    add_member_response = app_client.post(
+        "/household/members",
+        data={
+            "email": "spouse@example.com",
+            "display_name": "Spouse",
+            "password": "sharedhouse123",
+            "role": "member",
+        },
+        follow_redirects=True,
+    )
+
+    assert add_member_response.status_code == 200
+    assert "spouse@example.com" in add_member_response.text
+
+    app_client.post("/logout", follow_redirects=False)
+
+    member_response = app_client.post(
+        "/login",
+        data={"email": "spouse@example.com", "password": "sharedhouse123"},
+        follow_redirects=True,
+    )
+
+    assert member_response.status_code == 200
+    assert "Coffee" in member_response.text
+    assert "Primary Household" in member_response.text

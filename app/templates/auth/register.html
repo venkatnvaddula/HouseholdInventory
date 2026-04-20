@@ -1,0 +1,40 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="form-shell auth-shell">
+    <div>
+      <p class="eyebrow">Create household</p>
+      <h2>{{ page_title }}</h2>
+      <p class="form-help">The first account becomes the household owner and can add more members later.</p>
+    </div>
+
+    {% if error_message %}
+      <p class="error-banner">{{ error_message }}</p>
+    {% endif %}
+
+    <form class="item-form" method="post" action="/register">
+      <div class="form-row">
+        <label>
+          <span>Display name</span>
+          <input name="display_name" autocomplete="name" required />
+        </label>
+        <label>
+          <span>Household name</span>
+          <input name="household_name" placeholder="VV Household" />
+        </label>
+      </div>
+      <label>
+        <span>Email</span>
+        <input name="email" type="email" autocomplete="email" required />
+      </label>
+      <label>
+        <span>Password</span>
+        <input name="password" type="password" autocomplete="new-password" minlength="8" required />
+      </label>
+      <div class="card-actions">
+        <button class="button" type="submit">Create account</button>
+        <a class="button button-secondary" href="/login">Already have an account?</a>
+      </div>
+    </form>
+  </section>
+{% endblock %}

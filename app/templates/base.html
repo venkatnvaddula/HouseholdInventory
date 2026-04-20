@@ -3,20 +3,35 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>{{ request.app.title }}</title>
+    <title>VV Household | Household Inventory</title>
     <link rel="stylesheet" href="{{ url_for('static', path='styles.css') }}" />
     <script src="https://unpkg.com/htmx.org@2.0.4" defer></script>
   </head>
   <body>
     <main class="shell">
-      {% block page_header %}
-        <header class="page-header">
-          <div>
-            <p class="eyebrow">VV Household</p>
-            <h1>{{ request.app.title }}</h1>
-          </div>
-        </header>
-      {% endblock %}
+      <header class="page-header">
+        <div>
+          <p class="eyebrow">Household Inventory</p>
+          <h1>{{ request.app.title }}</h1>
+        </div>
+        <div class="page-header-meta">
+          {% if current_user %}
+            <div class="page-header-links">
+              <span class="page-header-user">{{ current_user.display_name }}</span>
+              <a class="button button-secondary button-small" href="/household/members">Members</a>
+              <form method="post" action="/logout">
+                <button class="button button-secondary button-small" type="submit">Log out</button>
+              </form>
+            </div>
+          {% else %}
+            <div class="page-header-links">
+              <a class="button button-secondary button-small" href="/login">Log in</a>
+              <a class="button button-small" href="/register">Create account</a>
+            </div>
+          {% endif %}
+        </div>
+      </header>
+      {% block page_header %}{% endblock %}
       {% block content %}{% endblock %}
     </main>
   </body>

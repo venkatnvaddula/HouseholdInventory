@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+
+{% block content %}
+  <section class="form-shell auth-shell">
+    <div>
+      <p class="eyebrow">Sign in</p>
+      <h2>{{ page_title }}</h2>
+      <p class="form-help">Use your household account to access the shared inventory.</p>
+    </div>
+
+    {% if error_message %}
+      <p class="error-banner">{{ error_message }}</p>
+    {% endif %}
+
+    <form class="item-form" method="post" action="/login">
+      <label>
+        <span>Email</span>
+        <input name="email" type="email" autocomplete="email" required />
+      </label>
+      <label>
+        <span>Password</span>
+        <input name="password" type="password" autocomplete="current-password" required />
+      </label>
+      <div class="card-actions">
+        <button class="button" type="submit">Log in</button>
+        <a class="button button-secondary" href="/register">Create account</a>
+      </div>
+    </form>
+  </section>
+{% endblock %}

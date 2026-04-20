@@ -1,13 +1,11 @@
 from datetime import date, datetime, timezone
 from decimal import Decimal
 
-from sqlalchemy import Select, delete, distinct, func, select
+from sqlalchemy import Select, distinct, func, select
 from sqlalchemy.orm import Session
 
 from app.models.item import Item
 
-
-DEFAULT_HOUSEHOLD_ID = 1
 CATEGORY_OPTIONS = ["Food", "Personal Care", "Household"]
 LOCATION_OPTIONS = [
     "Fridge",
@@ -37,12 +35,13 @@ DEFAULT_SORT_DIR = "asc"
 
 
 def build_items_query(
+    household_id: int,
     sort_by: str = DEFAULT_SORT_BY,
     sort_dir: str = DEFAULT_SORT_DIR,
     search: str = "",
 ) -> Select[tuple[Item]]:
     statement = select(Item).where(
-        Item.household_id == DEFAULT_HOUSEHOLD_ID,
+        Item.household_id == household_id,
         Item.deleted_at.is_(None),
     )
 
@@ -71,30 +70,31 @@ def build_items_query(
 
 def list_items(
     session: Session,
+    household_id: int,
     sort_by: str = DEFAULT_SORT_BY,
     sort_dir: str = DEFAULT_SORT_DIR,
     search: str = "",
 ) -> list[Item]:
     return list(
         session.scalars(
-            build_items_query(sort_by=sort_by, sort_dir=sort_dir, search=search)
+            build_items_query(household_id=household_id, sort_by=sort_by, sort_dir=sort_dir, search=search)
         )
     )
 
 
-def list_item_names(session: Session) -> list[str]:
+def list_item_names(session: Session, household_id: int) -> list[str]:
     statement = (
         select(distinct(Item.name))
-        .where(Item.household_id == DEFAULT_HOUSEHOLD_ID)
+        .where(Item.household_id == household_id)
         .order_by(Item.name.asc())
     )
     return [name for name in session.scalars(statement) if name]
 
 
-def list_item_history(session: Session) -> list[Item]:
+def list_item_history(session: Session, household_id: int) -> list[Item]:
     statement = (
         select(Item)
-        .where(Item.household_id == DEFAULT_HOUSEHOLD_ID)
+        .where(Item.household_id == household_id)
         .order_by(Item.created_at.desc(), Item.id.desc())
     )
     return list(session.scalars(statement))
@@ -107,10 +107,10 @@ def normalize_choice(selected_value: str, custom_value: str, fallback: str) -> s
     return selected_value.strip() or fallback
 
 
-def get_item(session: Session, item_id: int) -> Item | None:
+def get_item(session: Session, household_id: int, item_id: int) -> Item | None:
     statement = select(Item).where(
         Item.id == item_id,
-        Item.household_id == DEFAULT_HOUSEHOLD_ID,
+        Item.household_id == household_id,
         Item.deleted_at.is_(None),
     )
     return session.scalar(statement)
@@ -119,6 +119,7 @@ def get_item(session: Session, item_id: int) -> Item | None:
 def create_item(
     session: Session,
     *,
+    household_id: int,
     name: str,
     category: str,
     count: int,
@@ -131,7 +132,7 @@ def create_item(
     notes: str,
 ) -> Item:
     item = Item(
-        household_id=DEFAULT_HOUSEHOLD_ID,
+        household_id=household_id,
         name=name.strip(),
         category=category,
         count=count,
@@ -180,11 +181,11 @@ def update_item(
     return item
 
 
-def delete_item(session: Session, item_id: int) -> None:
+def delete_item(session: Session, household_id: int, item_id: int) -> None:
     item = session.scalar(
         select(Item).where(
             Item.id == item_id,
-            Item.household_id == DEFAULT_HOUSEHOLD_ID,
+            Item.household_id == household_id,
             Item.deleted_at.is_(None),
         )
     )
@@ -196,7 +197,7 @@ def delete_item(session: Session, item_id: int) -> None:
     session.commit()
 
 
-def bulk_delete_items(session: Session, *, item_ids: list[int]) -> None:
+def bulk_delete_items(session: Session, *, household_id: int, item_ids: list[int]) -> None:
     if not item_ids:
         return
 
@@ -204,7 +205,7 @@ def bulk_delete_items(session: Session, *, item_ids: list[int]) -> None:
     items = list(
         session.scalars(
             select(Item).where(
-                Item.household_id == DEFAULT_HOUSEHOLD_ID,
+                Item.household_id == household_id,
                 Item.id.in_(item_ids),
                 Item.deleted_at.is_(None),
             )
@@ -220,6 +221,7 @@ def bulk_delete_items(session: Session, *, item_ids: list[int]) -> None:
 def bulk_update_items(
     session: Session,
     *,
+    household_id: int,
     item_ids: list[int],
     field: str,
     value: str | float | date | None,
@@ -242,7 +244,7 @@ def bulk_update_items(
     items = list(
         session.scalars(
             select(Item).where(
-                Item.household_id == DEFAULT_HOUSEHOLD_ID,
+                Item.household_id == household_id,
                 Item.id.in_(item_ids),
                 Item.deleted_at.is_(None),
             )
